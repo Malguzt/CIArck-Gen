@@ -1,0 +1,32 @@
+export interface OpenRouterMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+}
+
+export interface OpenRouterCompletionResponse {
+    id: string;
+    choices: {
+        message: OpenRouterMessage;
+        finish_reason: string;
+    }[];
+    model: string;
+}
+
+export interface BlogPost {
+    id?: number;
+    title: string;
+    content: string;
+    status: 'publish' | 'draft' | 'pending';
+    authorId?: number;
+    date?: string;
+}
+
+export interface Profile {
+    id: string;
+    name: string;
+    personality: string;
+    role: string;
+    style: string;
+    interests: string[];
+    memories: string[];
+}
