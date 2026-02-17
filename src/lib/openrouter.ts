@@ -77,7 +77,7 @@ export class OpenRouterService {
             // Attempt to clean messy markdown json if present
             const jsonString = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
             return JSON.parse(jsonString);
-        } catch (e) {
+        } catch {
             console.error("Failed to parse JSON response from AI", content);
             // Fallback or better error handling needed
             throw new Error("Failed to generate valid JSON for blog post");

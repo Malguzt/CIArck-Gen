@@ -17,22 +17,27 @@ export class NewsService {
         const rssUrl = `https://trends.google.com/trends/trendingsearches/daily/rss?geo=${geo}`;
 
         try {
-            const response = await fetch(rssUrl);
+            const response = await fetch(rssUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            });
             if (!response.ok) {
-                throw new Error(`Failed to fetch trends: ${response.statusText}`);
+                console.error(`Failed to fetch trends: ${response.status} ${response.statusText}`);
+                return []; // Return empty instead of crashing
             }
 
             const xmlData = await response.text();
-            const parser = new XMLParser();
+            const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
             const jObj = parser.parse(xmlData);
 
             const items = jObj.rss?.channel?.item;
 
             if (!items) return [];
 
-            const trendItems: TrendItem[] = (Array.isArray(items) ? items : [items]).map((item: any) => ({
+            const trendItems: TrendItem[] = (Array.isArray(items) ? items : [items]).map((item: { title: string; link?: string; 'ht:news_item'?: { 'ht:news_item_url': string }; pubDate: string; description?: string }) => ({
                 title: item.title,
-                link: item.link || item['ht:news_item']?.['ht:news_item_url'], // Google Trends specific
+                link: item.link || item['ht:news_item']?.['ht:news_item_url'] || '#', // Google Trends specific fallback
                 pubDate: item.pubDate,
                 description: item.description,
                 source: 'Google Trends'
@@ -47,7 +52,7 @@ export class NewsService {
     }
 
     // Placeholder for NewsAPI if we want to add it later
-    async getNews(query: string): Promise<TrendItem[]> {
+    async getNews(_query: string): Promise<TrendItem[]> {
         if (!NEWS_API_KEY) {
             console.warn("NEWS_API_KEY not set");
             return [];

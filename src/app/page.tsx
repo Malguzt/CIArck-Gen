@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { Icons } from '@/components/Icons';
 import { newsService } from '@/lib/news';
+import { logsService } from '@/lib/logs';
 
 export default async function Home() {
   const trends = await newsService.getTrends();
+  const logs = await logsService.getLogs(5);
 
   return (
     <div className="space-y-8">
@@ -37,6 +39,15 @@ export default async function Home() {
               </div>
               <span className="font-medium text-neutral-300 group-hover:text-white">View Trends</span>
             </Link>
+            <Link
+              href="/profiles"
+              className="col-span-2 md:col-span-1 flex flex-col items-center justify-center p-6 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition-colors group cursor-pointer"
+            >
+              <div className="p-3 rounded-full bg-green-500/20 text-green-400 group-hover:bg-green-500 group-hover:text-white transition-colors mb-3">
+                <Icons.Users />
+              </div>
+              <span className="font-medium text-neutral-300 group-hover:text-white">Manage Profiles</span>
+            </Link>
           </div>
         </div>
 
@@ -64,11 +75,31 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* Recent Posts - Placeholder for now until we have real API connection verified */}
+      {/* Recent Activity Logs */}
       <div className="p-6 rounded-2xl bg-neutral-900 border border-neutral-800">
-        <h3 className="text-xl font-semibold mb-4 text-white">Recent Logs</h3>
-        <div className="p-4 bg-neutral-950/50 rounded-lg border border-neutral-800 text-neutral-400 text-sm">
-          System initialized and ready for deployment.
+        <h3 className="text-xl font-semibold mb-4 text-white">Recent Activity</h3>
+        <div className="space-y-4">
+          {logs.length > 0 ? (
+            logs.map(log => (
+              <div key={log.id} className="p-4 bg-neutral-950/50 rounded-lg border border-neutral-800 flex justify-between items-center">
+                <div>
+                  <p className="text-neutral-300 font-medium">{log.title}</p>
+                  <p className="text-sm text-neutral-500">{log.description}</p>
+                </div>
+                <div className="text-right">
+                  <span className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider ${log.status === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                    }`}>
+                    {log.action}
+                  </span>
+                  <p className="text-xs text-neutral-600 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-4 bg-neutral-950/50 rounded-lg border border-neutral-800 text-neutral-400 text-sm text-center">
+              No activity recorded yet. Start generating content!
+            </div>
+          )}
         </div>
       </div>
     </div>

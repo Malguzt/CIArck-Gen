@@ -39,7 +39,7 @@ export class WordPressService {
 
             const data = await response.json();
 
-            return data.map((post: any) => ({
+            return data.map((post: { id: number; title: { rendered: string }; content: { rendered: string }; status: 'publish' | 'draft' | 'pending'; date: string }) => ({
                 id: post.id,
                 title: post.title.rendered,
                 content: post.content.rendered,
