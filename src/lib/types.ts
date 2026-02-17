@@ -30,3 +30,14 @@ export interface Profile {
     interests: string[];
     memories: string[];
 }
+
+export interface Comment {
+    id: number;
+    author_name: string;
+    content: {
+        rendered: string;
+    };
+    date: string;
+    status: 'approved' | 'hold' | 'spam' | 'trash';
+    post: number; // Post ID
+}

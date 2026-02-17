@@ -1,4 +1,4 @@
-import { BlogPost } from './types';
+import { BlogPost, Comment } from './types';
 
 const WP_URL = process.env.WORDPRESS_URL;
 const WP_USER = process.env.WORDPRESS_USERNAME;
@@ -87,6 +87,47 @@ export class WordPressService {
         } catch (error) {
             console.error('Failed to create post:', error);
             throw error;
+        }
+    }
+
+    async getComments(status: string = 'hold'): Promise<Comment[]> {
+        if (!this.baseUrl) return [];
+
+        try {
+            const response = await fetch(this.getApiUrl(`comments?status=${status}&per_page=20`), {
+                headers: this.authHeader ? { 'Authorization': this.authHeader } : {},
+            });
+
+            if (!response.ok) {
+                // If 401/403, might be because app password lacks permissions or is invalid
+                console.warn(`Failed to fetch comments: ${response.statusText}`);
+                return [];
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Failed to fetch comments:', error);
+            return [];
+        }
+    }
+
+    async updateComment(id: number, status: 'approve' | 'hold' | 'spam' | 'trash'): Promise<boolean> {
+        if (!this.baseUrl || !this.authHeader) return false;
+
+        try {
+            const response = await fetch(this.getApiUrl(`comments/${id}`), {
+                method: 'POST', // WP API uses POST for updates usually, or PUT
+                headers: {
+                    'Authorization': this.authHeader,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status }),
+            });
+
+            return response.ok;
+        } catch (error) {
+            console.error(`Failed to update comment ${id}:`, error);
+            return false;
         }
     }
 }

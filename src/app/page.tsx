@@ -48,6 +48,15 @@ export default async function Home() {
               </div>
               <span className="font-medium text-neutral-300 group-hover:text-white">Manage Profiles</span>
             </Link>
+            <Link
+              href="/comments"
+              className="col-span-2 md:col-span-1 flex flex-col items-center justify-center p-6 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition-colors group cursor-pointer"
+            >
+              <div className="p-3 rounded-full bg-yellow-500/20 text-yellow-400 group-hover:bg-yellow-500 group-hover:text-white transition-colors mb-3">
+                <Icons.MessageSquare />
+              </div>
+              <span className="font-medium text-neutral-300 group-hover:text-white">Comments</span>
+            </Link>
           </div>
         </div>
 
