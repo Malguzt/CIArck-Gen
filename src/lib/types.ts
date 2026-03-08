@@ -40,4 +40,9 @@ export interface Comment {
     date: string;
     status: 'approved' | 'hold' | 'spam' | 'trash';
     post: number; // Post ID
+    analysis?: {
+        classification: 'approve' | 'trash' | 'spam';
+        reason: string;
+        tags?: string[];
+    };
 }

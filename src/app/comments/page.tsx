@@ -8,13 +8,29 @@ export default function CommentsPage() {
     const [comments, setComments] = useState<Comment[]>([]);
     const [status, setStatus] = useState<string>('hold');
     const [isLoading, setIsLoading] = useState(true);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     const fetchComments = async () => {
         setIsLoading(true);
         try {
             const res = await fetch(`/api/comments?status=${status}`);
             if (res.ok) {
-                const data = await res.json();
+                let data = await res.json();
+
+                // If pending, also fetch analysis results
+                if (status === 'hold') {
+                    const analyzeRes = await fetch('/api/comments/analyze', {
+                        method: 'POST',
+                        body: JSON.stringify({ force: false }) // Check for existing analyses
+                    });
+                    if (analyzeRes.ok) {
+                        const { results } = await analyzeRes.json();
+                        data = data.map((c: Comment) => ({
+                            ...c,
+                            analysis: results[c.id]
+                        }));
+                    }
+                }
                 setComments(data);
             }
         } catch (error) {
@@ -37,7 +53,6 @@ export default function CommentsPage() {
             });
 
             if (res.ok) {
-                // Refresh list
                 fetchComments();
             } else {
                 alert('Failed to update comment');
@@ -47,6 +62,37 @@ export default function CommentsPage() {
             alert('Error updating comment');
         }
     };
+
+    const handleAnalyze = async () => {
+        setIsAnalyzing(true);
+        try {
+            // Force analysis of all pending
+            const res = await fetch('/api/comments/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true })
+            });
+            if (res.ok) {
+                fetchComments();
+            }
+        } catch (error) {
+            console.error('Analysis failed', error);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleBulkTrash = async () => {
+        if (!confirm('Are you sure you want to trash all comments identified as Spam/Trash?')) return;
+
+        const toTrash = comments.filter(c => c.analysis && ['trash', 'spam'].includes(c.analysis.classification));
+
+        for (const comment of toTrash) {
+            await handleAction(comment.id, 'trash');
+        }
+    };
+
+    const trashCount = comments.filter(c => c.analysis && ['trash', 'spam'].includes(c.analysis.classification)).length;
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
@@ -62,20 +108,54 @@ export default function CommentsPage() {
                 </Link>
             </header>
 
-            {/* Tabs */}
-            <div className="flex space-x-1 bg-neutral-900 p-1 rounded-xl w-fit">
-                {['hold', 'approve', 'spam'].map((s) => (
-                    <button
-                        key={s}
-                        onClick={() => setStatus(s)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${status === s
+            {/* Controls */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                {/* Tabs */}
+                <div className="flex space-x-1 bg-neutral-900 p-1 rounded-xl">
+                    {['hold', 'approve', 'spam'].map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => setStatus(s)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${status === s
                                 ? 'bg-neutral-800 text-white shadow-sm'
                                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
-                            }`}
-                    >
-                        {s === 'hold' ? 'Pending' : s}
-                    </button>
-                ))}
+                                }`}
+                        >
+                            {s === 'hold' ? 'Pending' : s}
+                        </button>
+                    ))}
+                </div>
+
+                {/* AI Actions */}
+                {status === 'hold' && (
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleAnalyze}
+                            disabled={isAnalyzing || comments.length === 0}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                            {isAnalyzing ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Analyzing...
+                                </>
+                            ) : (
+                                <>
+                                    ✨ Analyze with AI
+                                </>
+                            )}
+                        </button>
+
+                        {trashCount > 0 && (
+                            <button
+                                onClick={handleBulkTrash}
+                                className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium rounded-lg transition-colors border border-red-500/20"
+                            >
+                                Trash {trashCount} Detected
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* List */}
@@ -84,13 +164,47 @@ export default function CommentsPage() {
                     <div className="text-center py-12 text-neutral-500">Loading comments...</div>
                 ) : comments.length > 0 ? (
                     comments.map((comment) => (
-                        <div key={comment.id} className="p-6 rounded-2xl bg-neutral-900 border border-neutral-800 flex flex-col gap-4">
+                        <div
+                            key={comment.id}
+                            className={`p-6 rounded-2xl border flex flex-col gap-4 transition-colors ${comment.analysis?.classification === 'trash' || comment.analysis?.classification === 'spam'
+                                ? 'bg-red-950/10 border-red-500/20'
+                                : comment.analysis?.classification === 'approve'
+                                    ? 'bg-green-950/10 border-green-500/20'
+                                    : 'bg-neutral-900 border-neutral-800'
+                                }`}
+                        >
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h4 className="font-semibold text-white">{comment.author_name}</h4>
-                                    <p className="text-xs text-neutral-500">
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="font-semibold text-white">{comment.author_name}</h4>
+                                        {comment.analysis && (
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-bold ${comment.analysis.classification === 'approve'
+                                                ? 'border-green-500/30 text-green-400 bg-green-500/10'
+                                                : 'border-red-500/30 text-red-400 bg-red-500/10'
+                                                }`}>
+                                                AI: {comment.analysis.classification}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-neutral-500 mt-1">
                                         on Post #{comment.post} • {new Date(comment.date).toLocaleString()}
                                     </p>
+
+                                    {comment.analysis?.tags && comment.analysis.tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {comment.analysis.tags.map((tag, i) => (
+                                                <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-400">
+                                                    #{tag}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {comment.analysis?.reason && (
+                                        <p className="text-xs text-neutral-400 mt-2 italic border-l-2 border-neutral-800 pl-2">
+                                            "{comment.analysis.reason}"
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex space-x-2">
                                     {status === 'hold' && (

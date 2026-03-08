@@ -91,7 +91,27 @@ export class WordPressService {
     }
 
     async getComments(status: string = 'hold'): Promise<Comment[]> {
-        if (!this.baseUrl) return [];
+        // Fallback for demo/testing if no WP connection or using placeholder
+        if (!this.baseUrl || this.baseUrl.includes('your-wordpress-site')) {
+            return [
+                {
+                    id: 1,
+                    author_name: "Demo User",
+                    content: { rendered: "This is a demo comment for testing purposes." },
+                    date: new Date().toISOString(),
+                    status: status as any,
+                    post: 1
+                },
+                {
+                    id: 2,
+                    author_name: "Spam Bot",
+                    content: { rendered: "Buy cheap meds now! <a href='#'>Click here</a>" },
+                    date: new Date().toISOString(),
+                    status: 'spam',
+                    post: 1
+                }
+            ].filter(c => c.status === status);
+        }
 
         try {
             const response = await fetch(this.getApiUrl(`comments?status=${status}&per_page=20`), {
