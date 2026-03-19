@@ -421,6 +421,139 @@ export class OpenRouterService {
             return {};
         }
     }
+
+    async describeImage(imageUrl: string): Promise<string> {
+        const messages: any[] = [
+            {
+                role: 'user',
+                content: [
+                    { type: 'text', text: 'Describe this image in detail, including any text written on it. This description will be used to recreate a similar image in another language.' },
+                    { type: 'image_url', image_url: { url: imageUrl } }
+                ]
+            }
+        ];
+
+        try {
+            return await this.complete(messages, 'openai/gpt-4o-mini');
+        } catch (error) {
+            console.error('Failed to describe image:', error);
+            return 'A professional image.';
+        }
+    }
+
+    async generateImagePrompt(topic: string, content: string): Promise<string> {
+        const systemPrompt = `You are a creative visual director. Your task is to generate a high-quality, detailed descriptive prompt for an AI image generator (like DALL-E 3 or Midjourney).
+        The image should represent the core message and tone of the blog post.
+        
+        Rules:
+        1. Be descriptive: mention style, lighting, composition, and key elements.
+        2. Keep it concise (under 200 words).
+        3. Avoid forbidden words (NSFW, etc.).
+        4. Focus on professional, high-quality aesthetics.
+        5. Return ONLY the prompt text.`;
+
+        const userPrompt = `Blog Post Topic: ${topic}\n\nContent Summary: ${content.substring(0, 1000)}...`;
+
+        const prompt: OpenRouterMessage[] = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ];
+
+        try {
+            return await this.complete(prompt, 'openai/gpt-4o-mini');
+        } catch (error) {
+            console.error('Failed to generate image prompt:', error);
+            return `A professional, high-quality illustration representing ${topic}`;
+        }
+    }
+
+    async translateImagePrompt(imageDescription: string, targetLanguage: string): Promise<string> {
+        const systemPrompt = `You are a professional translator and visual designer. You will be given a description of an image that contains text. 
+        Your task is to rewrite the prompt for an AI image generator so that any text mentioned in the image is translated into the target language.
+        
+        Target Language: ${targetLanguage}
+        
+        Original Image Description: ${imageDescription}
+        
+        Rules:
+        1. Fully preserve the visual style, composition, and mood of the original description.
+        2. Identify any text elements (signs, labels, books, titles) and translate them accurately into ${targetLanguage}.
+        3. DALL-E 3 is good at following text instructions, so be explicit about what the text should say.
+        4. Return ONLY the new, translated prompt text.`;
+
+        const prompt: OpenRouterMessage[] = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Please provide the translated version of the prompt in ${targetLanguage}.` }
+        ];
+
+        try {
+            return await this.complete(prompt, 'openai/gpt-4o-mini');
+        } catch (error) {
+            console.error('Failed to translate image prompt:', error);
+            return imageDescription;
+        }
+    }
+
+    async generateImage(prompt: string, model?: string): Promise<string> {
+        const candidateModels = [
+            model,
+            process.env.OPENROUTER_IMAGE_MODEL,
+            'google/gemini-2.5-flash-image:nitro',
+            'google/gemini-2.5-flash-image-preview:free',
+            'google/gemini-2.5-flash-image-preview',
+            'black-forest-labs/flux.2-flex',
+        ].filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
+
+        let lastError: Error | null = null;
+        const failedModels: string[] = [];
+
+        for (const candidateModel of candidateModels) {
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                        'HTTP-Referer': 'https://ciarck-gen.local',
+                        'X-Title': 'CIArck-Gen',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: candidateModel,
+                        messages: [{ role: 'user', content: prompt }],
+                        modalities: ['image', 'text'],
+                        stream: false,
+                    }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.text();
+                    throw new Error(`OpenRouter Image API Error (${candidateModel}): ${response.statusText} - ${err}`);
+                }
+
+                const data = await response.json();
+                const message = data.choices?.[0]?.message;
+                const imageUrl =
+                    message?.images?.[0]?.image_url?.url ||
+                    message?.images?.[0]?.imageUrl?.url ||
+                    '';
+
+                if (!imageUrl) {
+                    throw new Error(`OpenRouter Image API returned no image payload for ${candidateModel}`);
+                }
+
+                return imageUrl;
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error('Failed to generate image');
+                failedModels.push(candidateModel);
+            }
+        }
+
+        console.error(
+            `Failed to generate image after trying models: ${failedModels.join(', ')}`,
+            lastError
+        );
+        throw lastError || new Error('Failed to generate image');
+    }
 }
 
 export const openRouterService = new OpenRouterService();

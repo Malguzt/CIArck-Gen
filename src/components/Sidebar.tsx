@@ -7,6 +7,7 @@ import { Icons } from './Icons';
 const menuItems = [
     { name: 'Dashboard', href: '/', icon: Icons.Dashboard },
     { name: 'New Post', href: '/new', icon: Icons.Pencil },
+    { name: 'Images', href: '/images', icon: Icons.Image },
     { name: 'Profiles', href: '/profiles', icon: Icons.Users },
     { name: 'Translations', href: '/translations', icon: Icons.Languages },
     { name: 'Trends', href: '/trends', icon: Icons.Globe },

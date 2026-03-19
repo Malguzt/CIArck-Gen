@@ -1,4 +1,5 @@
-import { BlogPost, Comment } from './types';
+import { BlogPost, Comment, MediaItem } from './types';
+import { TrendItem } from './news';
 
 const WP_URL = process.env.WORDPRESS_URL;
 const WP_USER = process.env.WORDPRESS_USERNAME;
@@ -29,12 +30,11 @@ export class WordPressService {
 
         try {
             const endpoint = lang 
-                ? `posts?status=publish,draft&per_page=100&lang=${lang}`
-                : 'posts?status=publish,draft&per_page=100';
+                ? `posts?status=publish,draft&per_page=100&lang=${lang}&_embed`
+                : 'posts?status=publish,draft&per_page=100&_embed';
 
             const response = await fetch(this.getApiUrl(endpoint), {
                 headers: this.authHeader ? { 'Authorization': this.authHeader } : {},
-                // next: { revalidate: 60 } // Optional caching
             });
 
             if (!response.ok) {
@@ -53,6 +53,7 @@ export class WordPressService {
                 lang: post.lang || null,
                 translations: post.translations,
                 featured_media: post.featured_media,
+                featured_media_url: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || '',
             }));
         } catch (error) {
             console.error('Failed to fetch posts:', error);
@@ -180,7 +181,7 @@ export class WordPressService {
                 {
                     id: 1,
                     author_name: "Demo User",
-                    content: { rendered: "This is a demo comment for testing purposes." },
+                    content: "This is a demo comment for testing purposes.",
                     date: new Date().toISOString(),
                     status: status as any,
                     post: 1
@@ -188,7 +189,7 @@ export class WordPressService {
                 {
                     id: 2,
                     author_name: "Spam Bot",
-                    content: { rendered: "Buy cheap meds now! <a href='#'>Click here</a>" },
+                    content: "Buy cheap meds now! <a href='#'>Click here</a>",
                     date: new Date().toISOString(),
                     status: 'spam',
                     post: 1
@@ -207,10 +208,106 @@ export class WordPressService {
                 return [];
             }
 
-            return await response.json();
+            const data = await response.json();
+            return data.map((c: any) => ({
+                id: c.id,
+                author_name: c.author_name,
+                content: c.content?.rendered || '',
+                date: c.date,
+                status: c.status,
+                post: c.post,
+                analysis: c.analysis
+            }));
         } catch (error) {
             console.error('Failed to fetch comments:', error);
             return [];
+        }
+    }
+
+    async getPostMedia(postId: number): Promise<MediaItem[]> {
+        if (!this.baseUrl) return [];
+        try {
+            const response = await fetch(this.getApiUrl(`media?parent=${postId}`), {
+                headers: this.authHeader ? { 'Authorization': this.authHeader } : {},
+            });
+            if (!response.ok) return [];
+            const data = await response.json();
+            return data.map((item: any) => ({
+                id: item.id,
+                source_url: item.source_url,
+                title: item.title?.rendered || '',
+                alt_text: item.alt_text || '',
+                mime_type: item.mime_type,
+                media_details: item.media_details,
+            }));
+        } catch (error) {
+            console.error(`Failed to fetch media for post ${postId}:`, error);
+            return [];
+        }
+    }
+
+    async uploadMedia(source: string, fileName: string, postId?: number): Promise<MediaItem | null> {
+        if (!this.baseUrl || !this.authHeader) return null;
+        try {
+            let buffer: Buffer;
+            if (source.startsWith('http')) {
+                const res = await fetch(source);
+                buffer = Buffer.from(await res.arrayBuffer());
+            } else {
+                const base64Content = source.includes(',') ? source.split(',')[1] : source;
+                buffer = Buffer.from(base64Content, 'base64');
+            }
+
+            const blob = new Blob([new Uint8Array(buffer)]);
+            const formData = new FormData();
+            formData.append('file', blob, fileName);
+            if (postId) {
+                formData.append('post', postId.toString());
+            }
+
+            const response = await fetch(this.getApiUrl('media'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': this.authHeader,
+                },
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to upload media: ${response.statusText} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            return {
+                id: data.id,
+                source_url: data.source_url,
+                title: data.title?.rendered || '',
+                alt_text: data.alt_text || '',
+                mime_type: data.mime_type,
+                media_details: data.media_details,
+            };
+        } catch (error) {
+            console.error('Failed to upload media:', error);
+            return null;
+        }
+    }
+
+    async setFeaturedImage(postId: number, mediaId: number): Promise<boolean> {
+        if (!this.baseUrl || !this.authHeader) return false;
+        try {
+            const response = await fetch(this.getApiUrl(`posts/${postId}`), {
+                method: 'POST',
+                headers: {
+                    'Authorization': this.authHeader,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ featured_media: mediaId }),
+            });
+            return response.ok;
+        } catch (error) {
+            console.error(`Failed to set featured image for post ${postId}:`, error);
+            return false;
         }
     }
 

@@ -22,6 +22,20 @@ export interface BlogPost {
     lang?: string;
     translations?: Record<string, number>;
     featured_media?: number;
+    featured_media_url?: string;
+}
+
+export interface MediaItem {
+    id: number;
+    source_url: string;
+    title: string;
+    alt_text: string;
+    mime_type: string;
+    media_details?: {
+        width: number;
+        height: number;
+        file: string;
+    };
 }
 
 export interface Profile {
@@ -37,9 +51,7 @@ export interface Profile {
 export interface Comment {
     id: number;
     author_name: string;
-    content: {
-        rendered: string;
-    };
+    content: string;
     date: string;
     status: 'approved' | 'hold' | 'spam' | 'trash';
     post: number; // Post ID
