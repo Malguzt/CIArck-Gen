@@ -24,11 +24,15 @@ export class WordPressService {
         return `${this.baseUrl}wp-json/wp/v2/${endpoint}`;
     }
 
-    async getPosts(): Promise<BlogPost[]> {
+    async getPosts(lang: string = ''): Promise<BlogPost[]> {
         if (!this.baseUrl) return [];
 
         try {
-            const response = await fetch(this.getApiUrl('posts?status=publish,draft&per_page=10'), {
+            const endpoint = lang 
+                ? `posts?status=publish,draft&per_page=100&lang=${lang}`
+                : 'posts?status=publish,draft&per_page=100';
+
+            const response = await fetch(this.getApiUrl(endpoint), {
                 headers: this.authHeader ? { 'Authorization': this.authHeader } : {},
                 // next: { revalidate: 60 } // Optional caching
             });
@@ -39,12 +43,15 @@ export class WordPressService {
 
             const data = await response.json();
 
-            return data.map((post: { id: number; title: { rendered: string }; content: { rendered: string }; status: 'publish' | 'draft' | 'pending'; date: string }) => ({
+            return data.map((post: any) => ({
                 id: post.id,
-                title: post.title.rendered,
-                content: post.content.rendered,
+                title: post.title?.rendered || '',
+                content: post.content?.rendered || '',
                 status: post.status,
+                authorId: post.author,
                 date: post.date,
+                lang: post.lang || null,
+                translations: post.translations,
             }));
         } catch (error) {
             console.error('Failed to fetch posts:', error);
@@ -79,10 +86,12 @@ export class WordPressService {
             const data = await response.json();
             return {
                 id: data.id,
-                title: data.title.rendered,
-                content: data.content.rendered,
+                title: data.title?.rendered || '',
+                content: data.content?.rendered || '',
                 status: data.status,
                 date: data.date,
+                lang: data.lang,
+                translations: data.translations,
             };
         } catch (error) {
             console.error('Failed to create post:', error);
@@ -90,7 +99,76 @@ export class WordPressService {
         }
     }
 
-    async getComments(status: string = 'hold'): Promise<Comment[]> {
+    async createTranslation(post: { title: string; content: string; status: 'publish' | 'draft'; lang: string; translations: Record<string, number>; authorId?: number }): Promise<BlogPost | null> {
+        if (!this.baseUrl || !this.authHeader) {
+            throw new Error('WordPress API credentials or URL missing.');
+        }
+
+        try {
+            // Step 1: Create the post with its language
+            const requestBody: any = {
+                title: post.title,
+                content: post.content,
+                status: post.status,
+                lang: post.lang,
+            };
+            if (post.authorId) {
+                requestBody.author = post.authorId;
+            }
+
+            const response = await fetch(this.getApiUrl('posts'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': this.authHeader,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to create translation: ${response.statusText} - ${errorText}`);
+            }
+
+            const data = await response.json();
+
+            // Step 2: Update the newly created post with the translation links
+            if (post.translations && Object.keys(post.translations).length > 0) {
+                const updateResponse = await fetch(this.getApiUrl(`posts/${data.id}`), {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': this.authHeader,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        translations: post.translations,
+                    }),
+                });
+
+                if (!updateResponse.ok) {
+                    console.warn(`Translation was created (ID: ${data.id}), but linking failed:`, await updateResponse.text());
+                } else {
+                    const updateData = await updateResponse.json();
+                    data.translations = updateData.translations;
+                }
+            }
+
+            return {
+                id: data.id,
+                title: data.title?.rendered || '',
+                content: data.content?.rendered || '',
+                status: data.status,
+                date: data.date,
+                lang: data.lang,
+                translations: data.translations,
+            };
+        } catch (error) {
+            console.error('Failed to create translation:', error);
+            throw error;
+        }
+    }
+
+    async getComments(status: string = 'hold', offset: number = 0): Promise<Comment[]> {
         // Fallback for demo/testing if no WP connection or using placeholder
         if (!this.baseUrl || this.baseUrl.includes('your-wordpress-site')) {
             return [
@@ -110,11 +188,11 @@ export class WordPressService {
                     status: 'spam',
                     post: 1
                 }
-            ].filter(c => c.status === status);
+            ].filter(c => c.status === status).slice(offset, offset + 20);
         }
 
         try {
-            const response = await fetch(this.getApiUrl(`comments?status=${status}&per_page=20`), {
+            const response = await fetch(this.getApiUrl(`comments?status=${status}&per_page=20&offset=${offset}`), {
                 headers: this.authHeader ? { 'Authorization': this.authHeader } : {},
             });
 

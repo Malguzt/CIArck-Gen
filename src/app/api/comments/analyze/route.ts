@@ -6,10 +6,10 @@ import { openRouterService } from '@/lib/openrouter';
 export async function POST(req: Request) {
     try {
         const body = await req.json().catch(() => ({}));
-        const { force = false } = body;
+        const { force = false, offset = 0 } = body;
 
         // 1. Fetch pending comments from WordPress
-        const pendingComments = await wordpressService.getComments('hold');
+        const pendingComments = await wordpressService.getComments('hold', offset);
 
         if (pendingComments.length === 0) {
             return NextResponse.json({ message: 'No pending comments to analyze', results: [] });

@@ -9,6 +9,7 @@ export default function CommentsPage() {
     const [status, setStatus] = useState<string>('hold');
     const [isLoading, setIsLoading] = useState(true);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isAutoRunning, setIsAutoRunning] = useState(false);
 
     const fetchComments = async () => {
         setIsLoading(true);
@@ -82,6 +83,74 @@ export default function CommentsPage() {
         }
     };
 
+    const handleAutoRun = async () => {
+        if (!confirm('Are you sure you want to Auto Run? This will analyze ALL pending comments and automatically trash Spam/Trash.')) return;
+
+        setIsAutoRunning(true);
+        try {
+            let offset = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                const analyzeRes = await fetch('/api/comments/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: false, offset })
+                });
+
+                if (!analyzeRes.ok) {
+                    alert('Analysis failed during auto run');
+                    break;
+                }
+
+                // Also need to fetch the exact same comments to get their IDs and see if we have more
+                const res = await fetch(`/api/comments?status=hold&offset=${offset}`);
+                if (!res.ok) break;
+                const currentComments = await res.json();
+
+                if (currentComments.length === 0) {
+                    hasMore = false;
+                    break;
+                }
+
+                const { results } = await analyzeRes.json();
+
+                const toTrashIds = currentComments
+                    .map((c: any) => c.id)
+                    .filter((id: number) => {
+                        const analysis = results[id];
+                        return analysis && ['trash', 'spam'].includes(analysis.classification);
+                    });
+
+                let trashedCount = 0;
+                for (const id of toTrashIds) {
+                    const trashRes = await fetch('/api/comments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, status: 'trash' }),
+                    });
+                    if (trashRes.ok) trashedCount++;
+                }
+
+                // Adjust offset by the amount of comments we left in the queue.
+                // The ones we trashed are removed from the queue, so the queue shifts left.
+                const leftInQueue = currentComments.length - trashedCount;
+                offset += leftInQueue;
+
+                if (currentComments.length < 20) {
+                    hasMore = false;
+                }
+            }
+
+            await fetchComments();
+        } catch (error) {
+            console.error('Auto run failed', error);
+            alert('Auto run failed');
+        } finally {
+            setIsAutoRunning(false);
+        }
+    };
+
     const handleBulkTrash = async () => {
         if (!confirm('Are you sure you want to trash all comments identified as Spam/Trash?')) return;
 
@@ -131,7 +200,7 @@ export default function CommentsPage() {
                     <div className="flex gap-2">
                         <button
                             onClick={handleAnalyze}
-                            disabled={isAnalyzing || comments.length === 0}
+                            disabled={isAnalyzing || isAutoRunning || comments.length === 0}
                             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
                         >
                             {isAnalyzing ? (
@@ -142,6 +211,23 @@ export default function CommentsPage() {
                             ) : (
                                 <>
                                     ✨ Analyze with AI
+                                </>
+                            )}
+                        </button>
+
+                        <button
+                            onClick={handleAutoRun}
+                            disabled={isAnalyzing || isAutoRunning || comments.length === 0}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                            {isAutoRunning ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Running...
+                                </>
+                            ) : (
+                                <>
+                                    🤖 Auto Run
                                 </>
                             )}
                         </button>

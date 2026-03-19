@@ -4,8 +4,9 @@ import { wordpressService } from '@/lib/wordpress';
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'hold';
+    const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    const comments = await wordpressService.getComments(status);
+    const comments = await wordpressService.getComments(status, offset);
     return NextResponse.json(comments);
 }
 

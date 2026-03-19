@@ -19,6 +19,8 @@ export interface BlogPost {
     status: 'publish' | 'draft' | 'pending';
     authorId?: number;
     date?: string;
+    lang?: string;
+    translations?: Record<string, number>;
 }
 
 export interface Profile {

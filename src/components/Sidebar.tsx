@@ -8,6 +8,7 @@ const menuItems = [
     { name: 'Dashboard', href: '/', icon: Icons.Dashboard },
     { name: 'New Post', href: '/new', icon: Icons.Pencil },
     { name: 'Profiles', href: '/profiles', icon: Icons.Users },
+    { name: 'Translations', href: '/translations', icon: Icons.Languages },
     { name: 'Trends', href: '/trends', icon: Icons.Globe },
     { name: 'Settings', href: '/settings', icon: Icons.Settings },
 ];

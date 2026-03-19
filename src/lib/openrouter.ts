@@ -45,11 +45,11 @@ export class OpenRouterService {
 
             const data: OpenRouterCompletionResponse = await response.json();
 
-            if (!data.choices || data.choices.length === 0) {
+            if (!data.choices || data.choices.length === 0 || !data.choices[0].message) {
                 return '';
             }
 
-            return data.choices[0].message.content;
+            return data.choices[0].message.content || '';
         } catch (error) {
             console.error('Failed to complete with OpenRouter:', error);
             throw error;
@@ -82,6 +82,40 @@ export class OpenRouterService {
             console.error("Failed to parse JSON response from AI", content);
             // Fallback or better error handling needed
             throw new Error("Failed to generate valid JSON for blog post");
+        }
+    }
+
+    async translateContent(title: string, content: string, targetLanguage: string, model: string = 'openai/gpt-3.5-turbo'): Promise<{ title: string; content: string }> {
+        const systemPrompt = `You are a professional web content translator. Your task is to accurately translate a blog post's title and its full HTML content into the target language.
+        
+        Target Language: ${targetLanguage}
+        
+        Rules:
+        1. Fully preserve all HTML tags (e.g., <h2>, <p>, <ul>, <li>, <strong>, <em>, <a>) exactly as they are. DO NOT translate the HTML tags themselves, only the inner text.
+        2. Keep the formatting and structure identical to the original.
+        3. Do not add any extra commentary or markdown formatting outside of the JSON.
+        
+        Return ONLY a JSON response in this strict structure: {"title": "The translated Title", "content": "The fully translated HTML content"}.
+        Do not include markdown code blocks around the JSON.`;
+
+        const userPrompt = `Please translate the following to ${targetLanguage}:\n\nTitle: ${title}\n\nContent:\n${content}`;
+
+        const prompt: OpenRouterMessage[] = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ];
+
+        try {
+            const rawResponse = await this.complete(prompt, model);
+            const jsonString = rawResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+            const parsed = JSON.parse(jsonString);
+            return {
+                title: parsed.title || title,
+                content: parsed.content || content
+            };
+        } catch (error) {
+            console.error(`Failed to translate content to ${targetLanguage}:`, error);
+            throw new Error(`Failed to translate content to ${targetLanguage}`);
         }
     }
 
@@ -188,7 +222,7 @@ export class OpenRouterService {
     }
 
     async classifyComment(commentContent: string): Promise<{ classification: 'approve' | 'trash' | 'spam'; reason: string; tags: string[] }> {
-        const prompt = `You are a strict comment moderator for a blog. Analyze the following comment and classify it.
+        const basePrompt = `You are a strict comment moderator for a blog. Analyze the following comment and classify it.
         
         Classifications:
         - 'approve': valid, constructive, safe.
@@ -201,29 +235,65 @@ export class OpenRouterService {
         
         Return ONLY a JSON object with this format: { "classification": "approve" | "trash" | "spam", "reason": "short explanation", "tags": ["tag1", "tag2"] }`;
 
-        try {
-            const content = await this.complete(
-                [{ role: 'user', content: prompt }],
-                'arcee-ai/trinity-large-preview:free'
-            );
+        let promptMessages: OpenRouterMessage[] = [{ role: 'user', content: basePrompt }];
+        const maxRetries = 3;
 
-            const jsonString = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            const result = JSON.parse(jsonString);
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            let content = '';
+            try {
+                content = await this.complete(
+                    promptMessages,
+                    'arcee-ai/trinity-large-preview:free'
+                );
 
-            // Validate result
-            if (['approve', 'trash', 'spam'].includes(result.classification)) {
-                return {
-                    classification: result.classification,
-                    reason: result.reason || '',
-                    tags: Array.isArray(result.tags) ? result.tags : []
-                };
+                if (!content) {
+                    throw new Error('Empty response from model');
+                }
+
+                let jsonString = '';
+                const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+                if (jsonMatch) {
+                    jsonString = jsonMatch[1].trim();
+                } else {
+                    const objectMatch = content.match(/\{[\s\S]*\}/);
+                    jsonString = objectMatch ? objectMatch[0].trim() : content.trim();
+                }
+                const result = JSON.parse(jsonString);
+
+                // Validate result
+                if (['approve', 'trash', 'spam'].includes(result.classification)) {
+                    return {
+                        classification: result.classification,
+                        reason: result.reason || '',
+                        tags: Array.isArray(result.tags) ? result.tags : []
+                    };
+                }
+                
+                throw new Error(`Invalid classification value: ${result.classification}`);
+
+            } catch (error: any) {
+                console.warn(`Classification attempt ${attempt} failed:`, error.message);
+                
+                if (attempt === maxRetries) {
+                    console.error('Max classification retries reached.');
+                    return { classification: 'approve', reason: 'Error during classification after retries.', tags: [] };
+                }
+
+                // If it's not a network/API error, add feedback to prompt messages
+                if (error.message.indexOf('OpenRouter API Error') === -1 && error.message.indexOf('fetch failed') === -1) {
+                    promptMessages.push({ role: 'assistant', content: content || '(empty response)' });
+                    promptMessages.push({ 
+                        role: 'user', 
+                        content: `Your previous response failed to process. Error: ${error.message}. Please correct the output and respond ONLY with the exact required JSON structure.` 
+                    });
+                } else {
+                    // Optional delay for API rate limits / network blips
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             }
-            return { classification: 'approve', reason: 'Failed to classify cleanly.', tags: [] };
-
-        } catch (error) {
-            console.error('Classification failed:', error);
-            return { classification: 'approve', reason: 'Error during classification.', tags: [] };
         }
+        
+        return { classification: 'approve', reason: 'Error during classification.', tags: [] };
     }
 
     async generateTitleSuggestion(profile: Profile, trends: TrendItem[], model: string = 'openai/gpt-3.5-turbo'): Promise<string> {
