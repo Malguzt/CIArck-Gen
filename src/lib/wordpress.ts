@@ -52,6 +52,7 @@ export class WordPressService {
                 date: post.date,
                 lang: post.lang || null,
                 translations: post.translations,
+                featured_media: post.featured_media,
             }));
         } catch (error) {
             console.error('Failed to fetch posts:', error);
@@ -99,7 +100,7 @@ export class WordPressService {
         }
     }
 
-    async createTranslation(post: { title: string; content: string; status: 'publish' | 'draft'; lang: string; translations: Record<string, number>; authorId?: number }): Promise<BlogPost | null> {
+    async createTranslation(post: { title: string; content: string; status: 'publish' | 'draft'; lang: string; translations: Record<string, number>; authorId?: number; featured_media?: number }): Promise<BlogPost | null> {
         if (!this.baseUrl || !this.authHeader) {
             throw new Error('WordPress API credentials or URL missing.');
         }
@@ -114,6 +115,9 @@ export class WordPressService {
             };
             if (post.authorId) {
                 requestBody.author = post.authorId;
+            }
+            if (post.featured_media) {
+                requestBody.featured_media = post.featured_media;
             }
 
             const response = await fetch(this.getApiUrl('posts'), {
@@ -161,6 +165,7 @@ export class WordPressService {
                 date: data.date,
                 lang: data.lang,
                 translations: data.translations,
+                featured_media: data.featured_media,
             };
         } catch (error) {
             console.error('Failed to create translation:', error);

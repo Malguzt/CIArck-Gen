@@ -64,6 +64,7 @@ export async function POST(req: Request) {
                 lang: targetLanguage,
                 translations: polylangTranslationsObject,
                 authorId: authorId,
+                featured_media: body.featuredMedia,
             };
 
             const createdPost = await wordpressService.createTranslation(newPostData);

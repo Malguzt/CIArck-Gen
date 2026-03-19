@@ -21,6 +21,7 @@ export interface BlogPost {
     date?: string;
     lang?: string;
     translations?: Record<string, number>;
+    featured_media?: number;
 }
 
 export interface Profile {

@@ -46,6 +46,7 @@ interface PreviewData {
     targetLang: string;
     translatedTitle: string;
     translatedContent: string;
+    featuredMedia?: number;
 }
 
 export default function TranslationsList({ initialPosts }: TranslationsListProps) {
@@ -124,6 +125,7 @@ export default function TranslationsList({ initialPosts }: TranslationsListProps
                 targetLang,
                 translatedTitle: data.translated.title,
                 translatedContent: data.translated.content,
+                featuredMedia: originalPost.featured_media,
             });
 
         } catch (err: unknown) {
@@ -160,6 +162,7 @@ export default function TranslationsList({ initialPosts }: TranslationsListProps
                     targetLanguage: previewData.targetLang,
                     translations: currentTranslations,
                     authorId: previewData.originalPost.authorId,
+                    featuredMedia: previewData.featuredMedia,
                 })
             });
 
