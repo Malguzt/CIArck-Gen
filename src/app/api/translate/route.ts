@@ -60,7 +60,7 @@ export async function POST(req: Request) {
             const newPostData = {
                 title: title,
                 content: content,
-                status: 'draft' as const, // Draft by default for safety
+                status: 'publish' as const,
                 lang: targetLanguage,
                 translations: polylangTranslationsObject,
                 authorId: authorId,

@@ -190,7 +190,7 @@ export default function TranslationsList({ initialPosts }: TranslationsListProps
             });
 
             setPreviewData(null);
-            alert(`Translation to ${previewData.targetLang} saved successfully as Draft.`);
+            alert(`Translation to ${previewData.targetLang} published successfully.`);
 
         } catch (err: unknown) {
             console.error(err);
