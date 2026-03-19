@@ -13,6 +13,10 @@ export default function NewPostForm() {
     const [model, setModel] = useState('openai/gpt-3.5-turbo');
     const [profileId, setProfileId] = useState('');
     const [profiles, setProfiles] = useState<Profile[]>([]);
+    const [fetchedModels, setFetchedModels] = useState<any[]>([]);
+    const [top10Ids, setTop10Ids] = useState<string[]>([]);
+    const [isLoadingModels, setIsLoadingModels] = useState(false);
+    const [modelSearch, setModelSearch] = useState('');
 
     const [suggestions, setSuggestions] = useState<Record<string, string>>({});
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -50,10 +54,28 @@ export default function NewPostForm() {
                 if (dataSuggestions?.suggestions) {
                     setSuggestions(dataSuggestions.suggestions);
                 }
+
+                // Fetch models
+                setIsLoadingModels(true);
+                const resModels = await fetch('/api/models');
+                const dataModels = await resModels.json();
+                if (dataModels?.models) {
+                    setFetchedModels(dataModels.models);
+                    setTop10Ids(dataModels.top10Ids || []);
+                    // If no model selected yet or default gpt-3.5-turbo not in list, pick the first top 10
+                    if (dataModels.top10Ids?.length > 0 && model === 'openai/gpt-3.5-turbo') {
+                        // Check if gpt-3.5-turbo is actually available, if not, use the first top 10
+                        const isTurboAvailable = dataModels.models.some((m: any) => m.id === 'openai/gpt-3.5-turbo');
+                        if (!isTurboAvailable) {
+                            setModel(dataModels.top10Ids[0]);
+                        }
+                    }
+                }
             } catch (err) {
                 console.error("Failed to load initial data", err);
             } finally {
                 setIsLoadingSuggestions(false);
+                setIsLoadingModels(false);
             }
         };
 
@@ -268,17 +290,43 @@ export default function NewPostForm() {
 
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-neutral-400">AI Model</label>
-                        <select
-                            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                            value={model}
-                            onChange={(e) => setModel(e.target.value)}
-                        >
-                            <option value="openai/gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                            <option value="openai/gpt-4o">GPT-4o</option>
-                            <option value="anthropic/claude-3-opus">Claude 3 Opus</option>
-                            <option value="google/gemini-2.5-pro">Gemini Pro</option>
-                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
-                        </select>
+                        <div className="relative">
+                            <select
+                                className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                                value={model}
+                                onChange={(e) => setModel(e.target.value)}
+                            >
+                                {isLoadingModels && <option>Loading models...</option>}
+                                
+                                {top10Ids.length > 0 && (
+                                    <optgroup label="Top 10 Most Used (This Month)">
+                                        {top10Ids.map(id => {
+                                            const m = fetchedModels.find(item => item.id === id);
+                                            return m ? <option key={id} value={id}>{m.name}</option> : null;
+                                        })}
+                                    </optgroup>
+                                )}
+
+                                <optgroup label="All Models (Search below)">
+                                    {fetchedModels
+                                        .filter(m => !top10Ids.includes(m.id))
+                                        .filter(m => m.name.toLowerCase().includes(modelSearch.toLowerCase()) || m.id.toLowerCase().includes(modelSearch.toLowerCase()))
+                                        .slice(0, modelSearch ? 100 : 20) // Show limited unless searching
+                                        .map(m => (
+                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        ))
+                                    }
+                                </optgroup>
+                            </select>
+                            
+                            <input 
+                                type="text"
+                                placeholder="Search models..."
+                                className="mt-2 w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-400 focus:border-blue-500 outline-none"
+                                value={modelSearch}
+                                onChange={(e) => setModelSearch(e.target.value)}
+                            />
+                        </div>
                     </div>
                 </div>
 

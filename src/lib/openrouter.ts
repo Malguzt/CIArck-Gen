@@ -373,6 +373,35 @@ export class OpenRouterService {
             throw new Error('Failed to validate content veracity.');
         }
     }
+
+    async getTrendsContext(trendTitles: string[]): Promise<Record<string, string>> {
+        if (trendTitles.length === 0) return {};
+
+        const prompt = `You are a news analyst. I will provide a list of current trending topics from Google Trends. 
+        For each topic, provide a brief (1-2 sentences) explanation of WHY it is currently trending. 
+        Be specific (e.g., mention a new product launch, a major news event, or a social media viral trend).
+        
+        Topics:
+        ${trendTitles.map(t => `- ${t}`).join('\n')}
+        
+        Return ONLY a JSON object where keys are the EXACT topic names from the list above and values are the brief explanations.
+        Do not include Markdown blocks. Just the JSON object.`;
+
+        try {
+            const result = await this.complete(
+                [{ role: 'user', content: prompt }],
+                'perplexity/sonar-pro' // Web-enabled model
+            );
+
+            // Clean result for JSON parsing
+            const jsonString = result.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+            const contextMap = JSON.parse(jsonString);
+            return contextMap;
+        } catch (error) {
+            console.error('Failed to get trends context from AI:', error);
+            return {};
+        }
+    }
 }
 
 export const openRouterService = new OpenRouterService();
