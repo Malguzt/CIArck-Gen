@@ -5,7 +5,7 @@ import { profilesService } from '@/lib/profiles';
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { topic, model, profileId } = body;
+        const { topic, model, profileId, context } = body;
 
         if (!topic) {
             return NextResponse.json({ error: 'Topic is required' }, { status: 400 });
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
             }
         }
 
-        const result = await openRouterService.generateBlogPost(topic, model, systemPrompt);
+        const result = await openRouterService.generateBlogPost(topic, model, systemPrompt, context);
 
         // Memory Management: Save any requested new memories
         if (profileObj && result.newMemories && Array.isArray(result.newMemories) && result.newMemories.length > 0) {

@@ -37,7 +37,7 @@ export default async function TrendsPage() {
                                 <p className="text-xs text-neutral-500 mt-1">{trend.source} • {new Date(trend.pubDate).toLocaleDateString()}</p>
                             </div>
                             <Link
-                                href={`/new?topic=${encodeURIComponent(trend.title)}`}
+                                href={`/new?topic=${encodeURIComponent(trend.title)}${trend.context ? `&context=${encodeURIComponent(trend.context)}` : ''}`}
                                 className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-bold shadow-lg shadow-blue-500/10"
                             >
                                 Create Post

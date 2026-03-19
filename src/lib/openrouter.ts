@@ -56,32 +56,39 @@ export class OpenRouterService {
         }
     }
 
-    async generateBlogPost(topic: string, model: string, systemPrompt?: string): Promise<{ title: string; content: string; newMemories?: string[] }> {
+    async generateBlogPost(topic: string, model: string, systemPrompt?: string, context?: string): Promise<{ title: string; content: string; newMemories?: string[] }> {
         const defaultSystemPrompt = `You are a professional blog post writer. 
-        Return the response in JSON format with strict structure: {"title": "The Title", "content": "The full HTML content of the blog post"}. 
+        Your goal is to provide high-quality, engaging, and informative content.
+        Return the response in JSON format with strict structure: 
+        {"title": "The Title", "content": "The full HTML content of the blog post", "newMemories": ["(Optional) Any new important facts or experiences from writing this that you want to remember next time you are called. Include only if necessary."]}
         Do not include markdown code blocks around the JSON.`;
 
+        const userPrompt = `Please write a comprehensive, engaging, and SEO-friendly blog post about: **${topic}**.
+        ${context ? `\n\nBackground Context for this Topic:\n${context}` : ''}
+        
+        Requirements:
+        1. Use proper HTML tags for structure (h2, h3, p, ul, ol, strong, etc.).
+        2. Focus on readability and value for the reader.
+        3. Keep the tone professional yet approachable.
+        4. If you mention facts, try to ensure they are plausible (you can use your internal knowledge).`;
+
         const prompt: OpenRouterMessage[] = [
-            {
-                role: 'system',
-                content: systemPrompt || defaultSystemPrompt
-            },
-            {
-                role: 'user',
-                content: `Write a comprehensive blog post about: ${topic}`
-            }
+            { role: 'system', content: systemPrompt || defaultSystemPrompt },
+            { role: 'user', content: userPrompt }
         ];
 
-        const content = await this.complete(prompt, model);
-
         try {
-            // Attempt to clean messy markdown json if present
-            const jsonString = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            return JSON.parse(jsonString);
-        } catch {
-            console.error("Failed to parse JSON response from AI", content);
-            // Fallback or better error handling needed
-            throw new Error("Failed to generate valid JSON for blog post");
+            const rawResponse = await this.complete(prompt, model);
+            const jsonString = rawResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+            const parsed = JSON.parse(jsonString);
+            return {
+                title: parsed.title || topic,
+                content: parsed.content || '',
+                newMemories: Array.isArray(parsed.newMemories) ? parsed.newMemories : []
+            };
+        } catch (error) {
+            console.error(`Failed to generate blog post for topic "${topic}":`, error);
+            throw new Error(`Failed to generate blog post for topic "${topic}"`);
         }
     }
 
@@ -300,10 +307,8 @@ export class OpenRouterService {
         return { classification: 'approve', reason: 'Error during classification.', tags: [] };
     }
 
-    async generateTitleSuggestion(profile: Profile, trends: TrendItem[], model: string = 'openai/gpt-3.5-turbo'): Promise<string> {
-        const trendsList = trends.slice(0, 10).map(t => `- ${t.title}`).join('\n');
-
-        const systemPrompt = `You are playing the role of a specific writer. Your task is to brainstorm exactly ONE catchy blog post title based on the given trending topics.
+    async generateTitleSuggestion(profile: Profile, trends: TrendItem[], topic?: string, context?: string, model: string = 'openai/gpt-3.5-turbo'): Promise<{ title: string; newMemories?: string[] }> {
+        const systemPrompt = `You are playing the role of a specific writer. Your task is to brainstorm exactly ONE catchy blog post title.
         
         Your Profile:
         - Name: ${profile.name}
@@ -312,9 +317,18 @@ export class OpenRouterService {
         - Style: ${profile.style}
         - Interests: ${profile.interests.join(', ')}
 
-        You must return ONLY the blog post title itself and nothing else. No quotes, no explanations, no JSON. Just the raw string.`;
+        You must return ONLY a JSON response in this strict structure: {"title": "The Title", "newMemories": ["(Optional) Any new important facts or style rules you want to remember from brainstorming this topic."]}
+        Do not include markdown code blocks around the JSON.`;
 
-        const userPrompt = `Here are today's trending topics:\n${trendsList}\n\nBased on these trends, generate ONE catchy, engaging blog post title that aligns with your profile's role, interests, and style.`;
+        let userPrompt = '';
+        if (topic) {
+            userPrompt = `The user wants to write about the following topic: **${topic}**.
+            ${context ? `\nContext/Reason it's trending: ${context}\n` : ''}
+            Based on this topic and context, generate ONE catchy, engaging blog post title that aligns with your profile's role, interests, and style.`;
+        } else {
+            const trendsList = trends.slice(0, 10).map(t => `- ${t.title}`).join('\n');
+            userPrompt = `Here are today's trending topics:\n${trendsList}\n\nBased on these trends, generate ONE catchy, engaging blog post title that aligns with your profile's role, interests, and style.`;
+        }
 
         const prompt: OpenRouterMessage[] = [
             { role: 'system', content: systemPrompt },
@@ -322,11 +336,16 @@ export class OpenRouterService {
         ];
 
         try {
-            const title = await this.complete(prompt, model);
-            return title.replace(/^["']|["']$/g, '').trim(); // Remove surrounding quotes if any
+            const rawResponse = await this.complete(prompt, model);
+            const jsonString = rawResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+            const parsed = JSON.parse(jsonString);
+            return {
+                title: parsed.title?.replace(/^["']|["']$/g, '').trim() || '',
+                newMemories: Array.isArray(parsed.newMemories) ? parsed.newMemories : []
+            };
         } catch (error) {
             console.error(`Failed to generate title suggestion for ${profile.name}:`, error);
-            return '';
+            return { title: '' };
         }
     }
 

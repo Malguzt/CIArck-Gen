@@ -10,6 +10,7 @@ export default function NewPostForm() {
     const router = useRouter();
 
     const [topic, setTopic] = useState(searchParams.get('topic') || '');
+    const [context, setContext] = useState(searchParams.get('context') || '');
     const [model, setModel] = useState('openai/gpt-3.5-turbo');
     const [profileId, setProfileId] = useState('');
     const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -49,7 +50,7 @@ export default function NewPostForm() {
 
                 // Fetch suggestions
                 setIsLoadingSuggestions(true);
-                const resSuggestions = await fetch('/api/suggestions');
+                const resSuggestions = await fetch(`/api/suggestions?topic=${encodeURIComponent(topic)}&context=${encodeURIComponent(context)}`);
                 const dataSuggestions = await resSuggestions.json();
                 if (dataSuggestions?.suggestions) {
                     setSuggestions(dataSuggestions.suggestions);
@@ -89,7 +90,7 @@ export default function NewPostForm() {
             const res = await fetch('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic, model, profileId }),
+                body: JSON.stringify({ topic, model, profileId, context }),
             });
 
             if (!res.ok) throw new Error('Generation failed');
@@ -242,6 +243,12 @@ export default function NewPostForm() {
                         onChange={(e) => setTopic(e.target.value)}
                     />
                 </div>
+
+                {context && (
+                    <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg text-sm text-neutral-400 italic">
+                        <strong>Trend Context:</strong> {context}
+                    </div>
+                )}
 
                 {isLoadingSuggestions && (
                     <div className="text-sm text-neutral-500 animate-pulse flex items-center gap-2">
