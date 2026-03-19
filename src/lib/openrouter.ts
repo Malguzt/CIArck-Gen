@@ -93,8 +93,11 @@ export class OpenRouterService {
         Rules:
         1. Fully preserve all HTML tags (e.g., <h2>, <p>, <ul>, <li>, <strong>, <em>, <a>) exactly as they are. DO NOT translate the HTML tags themselves, only the inner text.
         2. IMAGES: You MUST preserve <img> tags. Keep the 'src', 'srcset', and 'class' attributes exactly the same (to point to the same original media). Translate the 'alt' text and any 'title' attributes within the image tags to the target language.
-        3. Keep the formatting and structure identical to the original.
-        4. Do not add any extra commentary or markdown formatting outside of the JSON.
+        3. TONE AND STYLE: 
+           - For Spanish: Use a natural, relaxed regional style from the Argentine Northeast (Corrientes, Chaco, Formosa, Misiones). Use "vos" for the second person singular. The language should feel authentic and provincial, avoid neutral "international" Spanish or the formal styles of Buenos Aires or Spain.
+           - For all languages: Avoid extremely formal or capital-city standard tones. Prefer a relaxed, friendly, and approachable provincial style.
+        4. Keep the formatting and structure identical to the original.
+        5. Do not add any extra commentary or markdown formatting outside of the JSON.
         
         Return ONLY a JSON response in this strict structure: {"title": "The translated Title", "content": "The fully translated HTML content"}.
         Do not include markdown code blocks around the JSON.`;

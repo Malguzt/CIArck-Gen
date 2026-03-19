@@ -346,6 +346,12 @@ function ciarck_ml_frontend_lang_filter( $query ) {
     }
 
     $lang = isset( $_GET['lang'] ) ? sanitize_text_field( $_GET['lang'] ) : '';
+    
+    // If no lang in URL, use the detected/default one (e.g. 'es')
+    if ( empty( $lang ) ) {
+        $lang = ciarck_ml_get_current_lang();
+    }
+
     if ( ! empty( $lang ) ) {
         $query->set( 'ciarck_ml_lang', $lang );
     }
