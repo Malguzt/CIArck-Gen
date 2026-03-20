@@ -13,6 +13,7 @@ interface ProfileFormProps {
 export default function ProfileForm({ initialData, onSave, onCancel }: ProfileFormProps) {
     const [formData, setFormData] = useState<Partial<Profile>>(initialData || {
         name: '',
+        wordpressAuthorId: undefined,
         role: '',
         personality: '',
         style: '',
@@ -80,6 +81,21 @@ export default function ProfileForm({ initialData, onSave, onCancel }: ProfileFo
                         placeholder="e.g. Senior Tech Editor"
                     />
                 </div>
+            </div>
+
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-400">WordPress Author ID (optional)</label>
+                <input
+                    type="number"
+                    min="1"
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={formData.wordpressAuthorId ?? ''}
+                    onChange={e => setFormData({
+                        ...formData,
+                        wordpressAuthorId: e.target.value ? parseInt(e.target.value, 10) : undefined
+                    })}
+                    placeholder="e.g. 7"
+                />
             </div>
 
             <div className="space-y-2">

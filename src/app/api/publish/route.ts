@@ -5,24 +5,33 @@ import { logsService } from '@/lib/logs';
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { title, content, status } = body;
+        const { title, content, status, postId, authorId } = body;
 
         if (!title || !content) {
             return NextResponse.json({ error: 'Title and content are required' }, { status: 400 });
         }
 
-        const result = await wordpressService.createPost({
-            title,
-            content,
-            status: status || 'draft',
-        });
+        const finalStatus = status || 'draft';
+        const result = postId
+            ? await wordpressService.updatePost(parseInt(postId), {
+                title,
+                content,
+                status: finalStatus,
+                authorId: authorId ? parseInt(authorId) : undefined,
+            })
+            : await wordpressService.createPost({
+                title,
+                content,
+                status: finalStatus,
+                authorId: authorId ? parseInt(authorId) : undefined,
+            });
 
         // Log the activity
         await logsService.addLog({
             action: status === 'publish' ? 'PUBLISH' : 'DRAFT',
             title: title,
             status: 'success',
-            description: `Successfully ${status === 'publish' ? 'published' : 'saved draft'} to WordPress.`
+            description: `Successfully ${status === 'publish' ? 'published' : 'saved draft'} ${postId ? 'existing post' : 'new post'} in WordPress.`
         });
 
         return NextResponse.json(result);

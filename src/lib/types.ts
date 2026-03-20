@@ -41,6 +41,7 @@ export interface MediaItem {
 export interface Profile {
     id: string;
     name: string;
+    wordpressAuthorId?: number;
     personality: string;
     role: string;
     style: string;

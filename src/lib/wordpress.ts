@@ -61,23 +61,28 @@ export class WordPressService {
         }
     }
 
-    async createPost(post: { title: string; content: string; status: 'publish' | 'draft' }): Promise<BlogPost | null> {
+    async createPost(post: { title: string; content: string; status: 'publish' | 'draft'; authorId?: number }): Promise<BlogPost | null> {
         if (!this.baseUrl || !this.authHeader) {
             throw new Error('WordPress API credentials or URL missing.');
         }
 
         try {
+            const requestBody: any = {
+                title: post.title,
+                content: post.content,
+                status: post.status,
+            };
+            if (post.authorId) {
+                requestBody.author = post.authorId;
+            }
+
             const response = await fetch(this.getApiUrl('posts'), {
                 method: 'POST',
                 headers: {
                     'Authorization': this.authHeader,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    title: post.title,
-                    content: post.content,
-                    status: post.status,
-                }),
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -97,6 +102,53 @@ export class WordPressService {
             };
         } catch (error) {
             console.error('Failed to create post:', error);
+            throw error;
+        }
+    }
+
+    async updatePost(postId: number, post: { title: string; content: string; status: 'publish' | 'draft'; authorId?: number }): Promise<BlogPost | null> {
+        if (!this.baseUrl || !this.authHeader) {
+            throw new Error('WordPress API credentials or URL missing.');
+        }
+
+        try {
+            const requestBody: any = {
+                title: post.title,
+                content: post.content,
+                status: post.status,
+            };
+            if (post.authorId) {
+                requestBody.author = post.authorId;
+            }
+
+            const response = await fetch(this.getApiUrl(`posts/${postId}`), {
+                method: 'POST',
+                headers: {
+                    'Authorization': this.authHeader,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to update post: ${response.statusText} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            return {
+                id: data.id,
+                title: data.title?.rendered || '',
+                content: data.content?.rendered || '',
+                status: data.status,
+                authorId: data.author,
+                date: data.date,
+                lang: data.lang || null,
+                translations: data.translations,
+                featured_media: data.featured_media,
+            };
+        } catch (error) {
+            console.error(`Failed to update post ${postId}:`, error);
             throw error;
         }
     }

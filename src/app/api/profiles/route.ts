@@ -29,6 +29,7 @@ export async function POST(req: Request) {
         const newProfile: Profile = {
             id: uuidv4(),
             name: body.name,
+            wordpressAuthorId: body.wordpressAuthorId ? parseInt(body.wordpressAuthorId) : undefined,
             role: body.role,
             personality: body.personality || '',
             style: body.style || '',
@@ -56,6 +57,7 @@ export async function PUT(req: Request) {
         const updatedProfile: Profile = {
             id: body.id,
             name: body.name,
+            wordpressAuthorId: body.wordpressAuthorId ? parseInt(body.wordpressAuthorId) : undefined,
             role: body.role,
             personality: body.personality,
             style: body.style,

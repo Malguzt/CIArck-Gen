@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Icons } from '@/components/Icons';
-import { Profile } from '@/lib/types';
+import { BlogPost, Profile } from '@/lib/types';
 
 export default function NewPostForm() {
     const searchParams = useSearchParams();
@@ -11,6 +11,9 @@ export default function NewPostForm() {
 
     const [topic, setTopic] = useState(searchParams.get('topic') || '');
     const [context, setContext] = useState(searchParams.get('context') || '');
+    const [mode, setMode] = useState<'new' | 'existing'>('new');
+    const [existingPosts, setExistingPosts] = useState<BlogPost[]>([]);
+    const [selectedExistingPostId, setSelectedExistingPostId] = useState<number | null>(null);
     const [model, setModel] = useState('openai/gpt-3.5-turbo');
     const [profileId, setProfileId] = useState('');
     const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -37,6 +40,20 @@ export default function NewPostForm() {
     
     const [error, setError] = useState('');
 
+    const clearReviewState = () => {
+        setValidationReport(null);
+        setEditorSuggestions({});
+    };
+
+    const loadExistingPostInEditor = (postId: number) => {
+        const existing = existingPosts.find(p => p.id === postId);
+        if (!existing) return;
+        setSelectedExistingPostId(postId);
+        setGeneratedContent({ title: existing.title, content: existing.content });
+        clearReviewState();
+        setError('');
+    };
+
     useEffect(() => {
         // Fetch profiles and suggestions on mount
         const loadInitialData = async () => {
@@ -46,6 +63,13 @@ export default function NewPostForm() {
                 if (Array.isArray(dataProfiles)) {
                     setProfiles(dataProfiles);
                     if (dataProfiles.length > 0 && !profileId) setProfileId(dataProfiles[0].id);
+                }
+
+                // Fetch existing posts for edit mode
+                const resPosts = await fetch('/api/posts');
+                const dataPosts = await resPosts.json();
+                if (Array.isArray(dataPosts)) {
+                    setExistingPosts(dataPosts);
                 }
 
                 // Fetch suggestions
@@ -97,11 +121,21 @@ export default function NewPostForm() {
 
             const data = await res.json();
             setGeneratedContent(data);
+            setSelectedExistingPostId(null);
+            clearReviewState();
         } catch (err) {
             setError('Failed to generate content. Please try again.');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleLoadExistingPost = () => {
+        if (!selectedExistingPostId) {
+            setError('Select an existing post first.');
+            return;
+        }
+        loadExistingPostInEditor(selectedExistingPostId);
     };
 
     const handleValidateSources = async () => {
@@ -207,19 +241,23 @@ export default function NewPostForm() {
         if (!generatedContent) return;
         setIsPublishing(true);
         try {
+            const selectedProfile = profiles.find(p => p.id === profileId);
             const res = await fetch('/api/publish', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     title: generatedContent.title,
                     content: generatedContent.content,
-                    status
+                    status,
+                    postId: mode === 'existing' ? selectedExistingPostId : undefined,
+                    authorId: selectedProfile?.wordpressAuthorId,
                 }),
             });
 
             if (!res.ok) throw new Error('Publishing failed');
 
-            alert(status === 'publish' ? 'Published successfully!' : 'Saved as draft!');
+            const actionLabel = status === 'publish' ? 'published' : 'saved as draft';
+            alert(mode === 'existing' ? `Existing post ${actionLabel} successfully!` : `Post ${actionLabel} successfully!`);
             router.push('/');
         } catch (err) {
             setError('Failed to publish post.');
@@ -234,6 +272,74 @@ export default function NewPostForm() {
 
             <div className="grid gap-6 p-6 rounded-2xl bg-neutral-900 border border-neutral-800">
                 <div className="space-y-2">
+                    <label className="text-sm font-medium text-neutral-400">Workflow</label>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => {
+                                setMode('new');
+                                setSelectedExistingPostId(null);
+                                setGeneratedContent(null);
+                                clearReviewState();
+                                setError('');
+                            }}
+                            className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                                mode === 'new'
+                                    ? 'bg-blue-600 border-blue-500 text-white'
+                                    : 'bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700'
+                            }`}
+                        >
+                            New Entry
+                        </button>
+                        <button
+                            onClick={() => {
+                                setMode('existing');
+                                setGeneratedContent(null);
+                                clearReviewState();
+                                setError('');
+                            }}
+                            className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                                mode === 'existing'
+                                    ? 'bg-blue-600 border-blue-500 text-white'
+                                    : 'bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700'
+                            }`}
+                        >
+                            Existing Entry
+                        </button>
+                    </div>
+                </div>
+
+                {mode === 'existing' && (
+                    <div className="space-y-3 p-4 rounded-xl border border-neutral-800 bg-neutral-950">
+                        <label className="text-sm font-medium text-neutral-400">Select Existing Post</label>
+                        <div className="flex gap-2">
+                            <select
+                                className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={selectedExistingPostId || ''}
+                                onChange={(e) => setSelectedExistingPostId(e.target.value ? parseInt(e.target.value) : null)}
+                            >
+                                <option value="">Choose a post...</option>
+                                {existingPosts.map(post => (
+                                    <option key={post.id} value={post.id}>
+                                        #{post.id} - {post.title.replace(/<[^>]*>/g, '').slice(0, 90)}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleLoadExistingPost}
+                                disabled={!selectedExistingPostId}
+                                className="px-4 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Load
+                            </button>
+                        </div>
+                        <p className="text-xs text-neutral-500">
+                            You can run validation, editing review, and writer revision on this loaded post.
+                        </p>
+                    </div>
+                )}
+
+                {mode === 'new' && (
+                <div className="space-y-2">
                     <label className="text-sm font-medium text-neutral-400">Topic / Title</label>
                     <input
                         type="text"
@@ -243,20 +349,21 @@ export default function NewPostForm() {
                         onChange={(e) => setTopic(e.target.value)}
                     />
                 </div>
+                )}
 
-                {context && (
+                {mode === 'new' && context && (
                     <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg text-sm text-neutral-400 italic">
                         <strong>Trend Context:</strong> {context}
                     </div>
                 )}
 
-                {isLoadingSuggestions && (
+                {mode === 'new' && isLoadingSuggestions && (
                     <div className="text-sm text-neutral-500 animate-pulse flex items-center gap-2">
                         <Icons.Spinner className="w-4 h-4 animate-spin" /> Generating trending title suggestions...
                     </div>
                 )}
 
-                {Object.keys(suggestions).length > 0 && (
+                {mode === 'new' && Object.keys(suggestions).length > 0 && (
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-neutral-400">Suggested by Profiles</label>
                         <div className="flex flex-wrap gap-2">
@@ -337,19 +444,21 @@ export default function NewPostForm() {
                     </div>
                 </div>
 
-                <button
-                    onClick={handleGenerate}
-                    disabled={!topic || isLoading}
-                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                >
-                    {isLoading ? (
-                        <span>Generating Magic...</span>
-                    ) : (
-                        <>
-                            <Icons.Pencil /> <span>Generate Content</span>
-                        </>
-                    )}
-                </button>
+                {mode === 'new' && (
+                    <button
+                        onClick={handleGenerate}
+                        disabled={!topic || isLoading}
+                        className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                    >
+                        {isLoading ? (
+                            <span>Generating Magic...</span>
+                        ) : (
+                            <>
+                                <Icons.Pencil /> <span>Generate Content</span>
+                            </>
+                        )}
+                    </button>
+                )}
 
                 {error && (
                     <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm">
@@ -496,17 +605,17 @@ export default function NewPostForm() {
                         <div className="space-x-4 flex">
                             <button
                                 onClick={() => handlePublish('draft')}
-                                disabled={isPublishing || isValidating || isEditing || isRevising}
+                                disabled={isPublishing || isValidating || isEditing || isRevising || (mode === 'existing' && !selectedExistingPostId)}
                                 className="px-6 py-3 rounded-xl bg-neutral-800 text-white font-medium hover:bg-neutral-700 transition-colors"
                             >
-                                Save as Draft
+                                {mode === 'existing' ? 'Update Draft' : 'Save as Draft'}
                             </button>
                             <button
                                 onClick={() => handlePublish('publish')}
-                                disabled={isPublishing || isValidating || isEditing || isRevising}
+                                disabled={isPublishing || isValidating || isEditing || isRevising || (mode === 'existing' && !selectedExistingPostId)}
                                 className="px-6 py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 transition-colors"
                             >
-                                {isPublishing ? 'Publishing...' : 'Publish Post'}
+                                {isPublishing ? 'Publishing...' : mode === 'existing' ? 'Update & Publish' : 'Publish Post'}
                             </button>
                         </div>
                     </div>

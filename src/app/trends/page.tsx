@@ -23,7 +23,7 @@ export default async function TrendsPage() {
         <div className="space-y-8">
             <header>
                 <h2 className="text-3xl font-bold">Trending Topics</h2>
-                <p className="text-neutral-400 mt-2">Discover what's popular right now and understand why it matter.</p>
+                <p className="text-neutral-400 mt-2">Global news focus: travel, remote work, insurance, technology, migration law, destinations, tourism events, and digital nomads.</p>
             </header>
 
             <div className="grid gap-4">
@@ -35,6 +35,11 @@ export default async function TrendsPage() {
                                     {trend.title}
                                 </a>
                                 <p className="text-xs text-neutral-500 mt-1">{trend.source} • {new Date(trend.pubDate).toLocaleDateString()}</p>
+                                {trend.category && (
+                                    <span className="inline-flex mt-2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-blue-600/15 border border-blue-500/30 text-blue-300 rounded-full">
+                                        {trend.category}
+                                    </span>
+                                )}
                             </div>
                             <Link
                                 href={`/new?topic=${encodeURIComponent(trend.title)}${trend.context ? `&context=${encodeURIComponent(trend.context)}` : ''}`}
